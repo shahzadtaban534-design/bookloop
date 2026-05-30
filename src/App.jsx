@@ -1,607 +1,283 @@
 import React, { useState, useMemo, useEffect } from 'react';
 
-const INITIAL_BOOKS = [
-  {
-    id: 'book-1',
-    title: 'The Midnight Library',
-    author: 'Matt Haig',
-    genre: 'Fiction',
-    condition: 'Like New',
-    price: 12.50,
-    originalPrice: 26.00,
-    description: 'A beautiful novel about all the choices that go into a life well lived. Only read once, perfect condition spine.',
-    coverEmoji: '🌌',
-    coverBg: 'from-indigo-900 to-purple-800 text-indigo-100',
-    sellerName: 'Sarah Jenkins',
-    sellerId: 'user-sarah',
-    listedAt: '2026-05-15'
-  },
-  {
-    id: 'book-2',
-    title: 'Atomic Habits',
-    author: 'James Clear',
-    genre: 'Self-Help',
-    condition: 'Good',
-    price: 9.99,
-    originalPrice: 18.00,
-    description: 'An easy & proven way to build good habits & break bad ones. Some light highlighting on chapter 3.',
-    coverEmoji: '⚡',
-    coverBg: 'from-amber-500 to-orange-600 text-white',
-    sellerName: 'David Chen',
-    sellerId: 'user-david',
-    listedAt: '2026-05-18'
-  },
-  {
-    id: 'book-3',
-    title: 'Dune (Deluxe Edition)',
-    author: 'Frank Herbert',
-    genre: 'Sci-Fi',
-    condition: 'Fair',
-    price: 8.00,
-    originalPrice: 22.50,
-    description: 'Classic sci-fi masterpiece. Cover has a small crease, and pages are slightly yellowed, but fully readable.',
-    coverEmoji: '🏜️',
-    coverBg: 'from-amber-700 to-yellow-800 text-yellow-100',
-    sellerName: 'Marcus Miller',
-    sellerId: 'user-marcus',
-    listedAt: '2026-05-20'
-  },
-  {
-    id: 'book-4',
-    title: 'Educated',
-    author: 'Tara Westover',
-    genre: 'Biography',
-    condition: 'Like New',
-    price: 11.20,
-    originalPrice: 28.00,
-    description: 'An unforgettable memoir about the power of learning and family. Bought brand new, outstanding shape.',
-    coverEmoji: '🎓',
-    coverBg: 'from-teal-700 to-emerald-800 text-emerald-100',
-    sellerName: 'Elena Rostova',
-    sellerId: 'user-elena',
-    listedAt: '2026-05-22'
-  }
-];
-
-const GENRES = ['All', 'Fiction', 'Self-Help', 'Sci-Fi', 'Biography', 'Mystery', 'Children', 'Textbook'];
-const CONDITIONS = ['All', 'Like New', 'Good', 'Fair'];
+const GENRES = ['All','Fiction','Self-Help','Sci-Fi','Biography','Mystery','Children','Textbook'];
+const CONDITIONS = ['All','Like New','Good','Fair'];
+const COMMISSION_RATE = 0.20;
+const pkr = (n) => 'PKR ' + Number(n).toLocaleString('en-PK');
+const load = (k,fb) => { try { const v=localStorage.getItem(k); return v?JSON.parse(v):fb; } catch { return fb; } };
+const save = (k,v) => { try { localStorage.setItem(k,JSON.stringify(v)); } catch {} };
+const inp = "w-full px-4 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 focus:outline-none text-base font-medium text-slate-800 transition-all";
 
 export default function App() {
-  const [books, setBooks] = useState(INITIAL_BOOKS);
-  const [currentView, setCurrentView] = useState('home'); // 'home' | 'dashboard' | 'checkout'
-  const [selectedBook, setSelectedBook] = useState(null);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedGenre, setSelectedGenre] = useState('All');
-  const [selectedCondition, setSelectedCondition] = useState('All');
-  const [cart, setCart] = useState([]);
-  const [notifications, setNotifications] = useState([]);
-  const [newsletterEmail, setNewsletterEmail] = useState('');
-  const [newsletterSubscribed, setNewsletterSubscribed] = useState(false);
-  
-  // Checkout & Card Payment Gateway Form States
-  const [cardName, setCardName] = useState('');
-  const [cardNumber, setCardNumber] = useState('');
-  const [cardExpiry, setCardExpiry] = useState('');
-  const [cardCvc, setCardCvc] = useState('');
-  const [isProcessingPayment, setIsProcessingPayment] = useState(false);
-  const [paymentReceipt, setPaymentReceipt] = useState(null);
+  const [books, setBooks]         = useState(() => load('bl_books',[]));
+  const [orders, setOrders]       = useState(() => load('bl_orders',[]));
+  const [wallet, setWallet]       = useState(() => load('bl_wallet',{balance:0,transactions:[]}));
+  const [subscribers, setSubs]    = useState(() => load('bl_subs',[]));
+  const [view, setView]           = useState('home');
+  const [searchQuery, setSearch]  = useState('');
+  const [selGenre, setGenre]      = useState('All');
+  const [selCond, setCond]        = useState('All');
+  const [toasts, setToasts]       = useState([]);
+  const [subEmail, setSubEmail]   = useState('');
+  const [confetti, setConfetti]   = useState([]);
 
-  // New Listing Form States
-  const [newTitle, setNewTitle] = useState('');
-  const [newAuthor, setNewAuthor] = useState('');
-  const [newGenre, setNewGenre] = useState('Fiction');
-  const [newCondition, setNewCondition] = useState('Good');
-  const [newPrice, setNewPrice] = useState('');
-  const [newOriginalPrice, setNewOriginalPrice] = useState('');
-  const [newDesc, setNewDesc] = useState('');
-  const [newEmoji, setNewEmoji] = useState('📖');
-  const [newBg, setNewBg] = useState('from-indigo-600 to-blue-500 text-white');
+  // Checkout
+  const [cbk, setCbk]       = useState(null); // checkoutBook
+  const [cStep, setCStep]   = useState(1);
+  const [bName, setBName]   = useState('');
+  const [bAddr, setBAddr]   = useState('');
+  const [bPhone, setBPhone] = useState('');
+  const [payM, setPayM]     = useState('EasyPaisa');
+  const [placed, setPlaced] = useState(null);
 
-  // Simulated Logged-In User Profile State
-  const [currentUser, setCurrentUser] = useState({
-    id: 'user-logged',
-    name: 'You (Alex Carter)',
-    balance: 120.00,
-    listedBooks: [],
-    purchasedBooks: [],
-    salesCount: 0,
-    totalEarnings: 0.00
-  });
+  // Sell
+  const [sTitle, setSTitle]   = useState('');
+  const [sAuth, setSAuth]     = useState('');
+  const [sGenre, setSGenre]   = useState('Fiction');
+  const [sCond, setSCond]     = useState('Good');
+  const [sPrice, setSPrice]   = useState('');
+  const [sPhone, setSPhone]   = useState('');
+  const [sCity, setSCity]     = useState('');
+  const [sDesc, setSDesc]     = useState('');
+  const [sCover, setSCover]   = useState(null);
 
-  // Interactive Confetti Overlay State
-  const [showConfetti, setShowConfetti] = useState(false);
-  const [confettiParticles, setConfettiParticles] = useState([]);
+  // Wallet
+  const [wAmt, setWAmt]     = useState('');
+  const [wMethod, setWMeth] = useState('EasyPaisa');
+  const [wAcc, setWAcc]     = useState('');
 
-  // Toast Notification Manager
-  const addToast = (text, type = 'success') => {
-    const id = Date.now();
-    setNotifications((prev) => [...prev, { id, text, type }]);
-    setTimeout(() => {
-      setNotifications((prev) => prev.filter((n) => n.id !== id));
-    }, 4500);
+  useEffect(()=>save('bl_books',books),[books]);
+  useEffect(()=>save('bl_orders',orders),[orders]);
+  useEffect(()=>save('bl_wallet',wallet),[wallet]);
+  useEffect(()=>save('bl_subs',subscribers),[subscribers]);
+
+  const toast = (text, type='success') => {
+    const id=Date.now();
+    setToasts(p=>[...p,{id,text,type}]);
+    setTimeout(()=>setToasts(p=>p.filter(n=>n.id!==id)),4000);
   };
 
-  const triggerConfetti = () => {
-    setShowConfetti(true);
-    const colors = ['#f59e0b', '#3b82f6', '#10b981', '#ec4899', '#8b5cf6', '#f43f5e'];
-    const particles = Array.from({ length: 80 }).map((_, i) => ({
-      id: i,
-      x: Math.random() * 100,
-      y: -10 - Math.random() * 20,
-      size: Math.random() * 8 + 6,
-      color: colors[Math.floor(Math.random() * colors.length)],
-      delay: Math.random() * 1.2,
-      duration: Math.random() * 2 + 1.5,
-      rotation: Math.random() * 360,
-      spinSpeed: Math.random() * 8 - 4
-    }));
-    setConfettiParticles(particles);
-    setTimeout(() => {
-      setShowConfetti(false);
-    }, 4000);
+  const boom = () => {
+    const colors=['#f59e0b','#3b82f6','#10b981','#ec4899','#8b5cf6','#f43f5e'];
+    setConfetti(Array.from({length:55}).map((_,i)=>({id:i,x:Math.random()*100,size:Math.random()*7+4,color:colors[i%6],delay:Math.random()*0.8,dur:Math.random()*2+1.5})));
+    setTimeout(()=>setConfetti([]),4000);
   };
 
-  // Commission Constants (20% to Platform Admin)
-  const COMMISSION_RATE = 0.20;
-  const calculateCommission = (price) => parseFloat((price * COMMISSION_RATE).toFixed(2));
-  const calculateSellerShare = (price) => parseFloat((price * (1 - COMMISSION_RATE)).toFixed(2));
+  const calc = p => ({commission:Math.round(p*COMMISSION_RATE), sellerNet:Math.round(p*0.8)});
 
-  const handleCardNumberChange = (e) => {
-    const value = e.target.value.replace(/\D/g, '').substring(0, 16);
-    const formatted = value.match(/.{1,4}/g)?.join(' ') || value;
-    setCardNumber(formatted);
-  };
-
-  const handleExpiryChange = (e) => {
-    let value = e.target.value.replace(/\D/g, '').substring(0, 4);
-    if (value.length >= 2) {
-      value = value.substring(0, 2) + '/' + value.substring(2);
-    }
-    setCardExpiry(value);
-  };
-
-  const handleCvcChange = (e) => {
-    const value = e.target.value.replace(/\D/g, '').substring(0, 3);
-    setCardCvc(value);
-  };
-
-  const handleAddBookListing = (e) => {
+  const listBook = (e) => {
     e.preventDefault();
-    if (!newTitle.trim() || !newAuthor.trim() || !newPrice) {
-      addToast("Please fill out the Title, Author, and Sale Price.", "warning");
-      return;
-    }
-
-    const listPrice = parseFloat(newPrice);
-    if (isNaN(listPrice) || listPrice <= 0) {
-      addToast("Please provide a valid selling price greater than $0.", "warning");
-      return;
-    }
-
-    const commissionVal = calculateCommission(listPrice);
-    const payoutVal = calculateSellerShare(listPrice);
-
-    const newBookObj = {
-      id: `custom-${Date.now()}`,
-      title: newTitle,
-      author: newAuthor,
-      genre: newGenre,
-      condition: newCondition,
-      price: listPrice,
-      originalPrice: parseFloat(newOriginalPrice) || parseFloat((listPrice * 2.1).toFixed(2)),
-      description: newDesc || 'A pre-loved book in search of a brand new adventure.',
-      coverEmoji: newEmoji,
-      coverBg: newBg,
-      sellerName: currentUser.name,
-      sellerId: currentUser.id,
-      listedAt: new Date().toISOString().split('T')[0]
-    };
-
-    setBooks((prev) => [newBookObj, ...prev]);
-    setCurrentUser((prev) => ({
-      ...prev,
-      listedBooks: [newBookObj, ...prev.listedBooks]
-    }));
-
-    // Reset Form
-    setNewTitle('');
-    setNewAuthor('');
-    setNewPrice('');
-    setNewOriginalPrice('');
-    setNewDesc('');
-    
-    addToast(`"${newBookObj.title}" listed! You'll receive $${payoutVal.toFixed(2)} on a sale (after 20% platform commission).`, 'success');
-    triggerConfetti();
+    const price=parseInt(sPrice);
+    if(!sTitle.trim()||!sAuth.trim()||!price||!sPhone.trim()){toast('Fill Title, Author, Price & WhatsApp.','warning');return;}
+    if(price<50){toast('Min price is PKR 50.','warning');return;}
+    const book={id:`bk-${Date.now()}`,title:sTitle,author:sAuth,genre:sGenre,condition:sCond,price,phone:sPhone,city:sCity,description:sDesc||'A pre-loved book looking for a new home.',coverImage:sCover,listedAt:new Date().toLocaleDateString('en-PK'),status:'available'};
+    setBooks(p=>[book,...p]);
+    setSTitle('');setSAuth('');setSPrice('');setSPhone('');setSCity('');setSDesc('');setSCover(null);
+    toast(`"${book.title}" listed! You'll receive ${pkr(calc(price).sellerNet)} on sale.`);
+    boom(); nav('home');
   };
 
-  const handleAddToCart = (book) => {
-    if (book.sellerId === currentUser.id) {
-      addToast("This is your listing! You cannot purchase your own book.", "warning");
-      return;
-    }
-    if (cart.some(item => item.id === book.id)) {
-      addToast(`"${book.title}" is already in your checkout list.`, "warning");
-      return;
-    }
-    setCart((prev) => [...prev, book]);
-    addToast(`"${book.title}" added to your shopping cart!`, "success");
+  const openCheckout = (book) => {
+    setCbk(book);setCStep(1);setBName('');setBAddr('');setBPhone('');setPayM('EasyPaisa');setPlaced(null);setView('checkout');
+    window.scrollTo(0,0);
   };
 
-  const handleRemoveFromCart = (bookId) => {
-    setCart((prev) => prev.filter(item => item.id !== bookId));
-    addToast("Removed item from checkout cart.", "info");
+  const placeOrder = () => {
+    if(!bName.trim()||!bAddr.trim()||!bPhone.trim()){toast('Fill all delivery details.','warning');return;}
+    const order={id:'BL-'+Math.floor(10000+Math.random()*90000),bookId:cbk.id,bookTitle:cbk.title,bookAuthor:cbk.author,bookPhone:cbk.phone,price:cbk.price,buyerName:bName,buyerAddress:bAddr,buyerPhone:bPhone,payMethod:payM,status:'Processing',fundsStatus:'held',date:new Date().toLocaleDateString('en-PK')};
+    setOrders(p=>[order,...p]);
+    setBooks(p=>p.map(b=>b.id===cbk.id?{...b,status:'sold'}:b));
+    setWallet(p=>({...p,transactions:[{id:Date.now(),type:'debit',label:`Payment held — "${cbk.title}"`,amount:cbk.price,status:'held',date:new Date().toLocaleDateString('en-PK')},...p.transactions]}));
+    setPlaced(order);boom();
+    toast('✅ Order placed! Seller will WhatsApp you.');
   };
 
-  const handleCheckoutComplete = (e) => {
-    if (e) e.preventDefault();
-    const subtotal = cart.reduce((acc, b) => acc + b.price, 0);
-    if (subtotal === 0) return;
-
-    if (!cardName.trim()) {
-      addToast("Please input the cardholder's full name.", "warning");
-      return;
-    }
-    if (cardNumber.replace(/\s/g, '').length < 16) {
-      addToast("Please enter a valid 16-digit card number.", "warning");
-      return;
-    }
-    if (cardExpiry.length < 5) {
-      addToast("Please enter a valid expiry date (MM/YY).", "warning");
-      return;
-    }
-    if (cardCvc.length < 3) {
-      addToast("Please enter a valid 3-digit CVV.", "warning");
-      return;
-    }
-
-    setIsProcessingPayment(true);
-    addToast("Authorizing online credit card payment...", "info");
-
-    setTimeout(() => {
-      setIsProcessingPayment(false);
-      
-      const adminCommission = cart.reduce((acc, item) => acc + calculateCommission(item.price), 0);
-      const sellerPayout = cart.reduce((acc, item) => acc + calculateSellerShare(item.price), 0);
-
-      const receipt = {
-        id: `TXN-${Math.floor(100000 + Math.random() * 900000)}`,
-        date: new Date().toLocaleString(),
-        total: subtotal,
-        adminFee: adminCommission,
-        sellerPayout: sellerPayout,
-        cardLast4: cardNumber.slice(-4),
-        items: [...cart]
-      };
-
-      setCurrentUser((prev) => ({
-        ...prev,
-        purchasedBooks: [...prev.purchasedBooks, ...cart]
-      }));
-
-      // Remove purchased books from active marketplace display
-      const purchasedIds = cart.map(item => item.id);
-      setBooks(prev => prev.filter(b => !purchasedIds.includes(b.id)));
-
-      setPaymentReceipt(receipt);
-      setCart([]);
-      
-      // Clear payment credentials
-      setCardName('');
-      setCardNumber('');
-      setCardExpiry('');
-      setCardCvc('');
-
-      triggerConfetti();
-      addToast(`Payment Processed! Platform commission of $${adminCommission.toFixed(2)} was securely routed.`, "success");
-    }, 2500);
+  const confirmDelivery = (oid) => {
+    const o=orders.find(x=>x.id===oid); if(!o) return;
+    const {commission,sellerNet}=calc(o.price);
+    setOrders(p=>p.map(x=>x.id===oid?{...x,status:'Delivered',fundsStatus:'released'}:x));
+    setWallet(p=>({balance:p.balance+commission,transactions:[
+      {id:Date.now(),type:'credit',label:`Commission — "${o.bookTitle}"`,amount:commission,status:'released',date:new Date().toLocaleDateString('en-PK')},
+      {id:Date.now()-1,type:'credit',label:`Seller payout — "${o.bookTitle}"`,amount:sellerNet,status:'released',date:new Date().toLocaleDateString('en-PK')},
+      ...p.transactions
+    ]}));
+    toast(`✅ Delivered! You earned ${pkr(commission)} commission.`);
   };
 
-  const filteredBooks = useMemo(() => {
-    return books.filter((book) => {
-      const matchesSearch = book.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                            book.author.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                            book.description.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchesGenre = selectedGenre === 'All' || book.genre === selectedGenre;
-      const matchesCondition = selectedCondition === 'All' || book.condition === selectedCondition;
-      return matchesSearch && matchesGenre && matchesCondition;
-    });
-  }, [books, searchQuery, selectedGenre, selectedCondition]);
-
-  const handleSubscribeNewsletter = (e) => {
+  const doWithdraw = (e) => {
     e.preventDefault();
-    if (!newsletterEmail.trim() || !newsletterEmail.includes('@')) {
-      addToast("Please enter a valid email address.", "warning");
-      return;
-    }
-    setNewsletterSubscribed(true);
-    addToast("Successfully subscribed to BookLoop digest!", "success");
-    triggerConfetti();
+    const amt=parseInt(wAmt);
+    if(!amt||amt<=0){toast('Enter valid amount.','warning');return;}
+    if(amt>wallet.balance){toast('Insufficient balance.','warning');return;}
+    if(!wAcc.trim()){toast('Enter account details.','warning');return;}
+    setWallet(p=>({balance:p.balance-amt,transactions:[{id:Date.now(),type:'debit',label:`Withdrawal via ${wMethod} → ${wAcc}`,amount:amt,status:'pending',date:new Date().toLocaleDateString('en-PK')},...p.transactions]}));
+    setWAmt('');setWAcc('');
+    toast(`Withdrawal of ${pkr(amt)} initiated!`);
   };
+
+  const doSubscribe = (e) => {
+    e.preventDefault();
+    if(!subEmail.trim()||!subEmail.includes('@')){toast('Enter valid email.','warning');return;}
+    if(subscribers.includes(subEmail)){toast('Already subscribed!','warning');return;}
+    setSubs(p=>[...p,subEmail]);
+    toast(`✉️ Subscribed! Alerts will go to ${subEmail}.`);
+    setSubEmail('');boom();
+  };
+
+  const filteredBooks = useMemo(()=>books.filter(b=>{
+    if(b.status==='sold') return false;
+    const q=searchQuery.toLowerCase();
+    return (b.title.toLowerCase().includes(q)||b.author.toLowerCase().includes(q))&&
+      (selGenre==='All'||b.genre===selGenre)&&(selCond==='All'||b.condition===selCond);
+  }),[books,searchQuery,selGenre,selCond]);
+
+  const nav = (v) => { setView(v); setPlaced(null); window.scrollTo(0,0); };
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 font-sans flex flex-col relative overflow-x-hidden">
-      
-      {}
-      {showConfetti && (
+    <div className="min-h-screen bg-gray-50 text-slate-900 font-sans flex flex-col relative overflow-x-hidden" style={{paddingBottom:'72px'}}>
+
+      {/* Confetti */}
+      {confetti.length>0&&(
         <div className="fixed inset-0 pointer-events-none z-50 overflow-hidden">
-          {confettiParticles.map((p) => (
-            <div
-              key={p.id}
-              className="absolute rounded"
-              style={{
-                left: `${p.x}%`,
-                top: `${p.y}%`,
-                width: `${p.size}px`,
-                height: `${p.size * 1.5}px`,
-                backgroundColor: p.color,
-                opacity: 0.9,
-                transform: `rotate(${p.rotation}deg)`,
-                animation: `fall ${p.duration}s linear ${p.delay}s infinite`,
-              }}
-            />
-          ))}
-          <style>{`
-            @keyframes fall {
-              0% { top: -5%; transform: translateY(0) rotate(0deg); }
-              100% { top: 110%; transform: translateY(100vh) rotate(720deg); }
-            }
-          `}</style>
+          {confetti.map(p=><div key={p.id} className="absolute rounded" style={{left:`${p.x}%`,top:'-5%',width:`${p.size}px`,height:`${p.size*1.5}px`,backgroundColor:p.color,animation:`fall ${p.dur}s linear ${p.delay}s infinite`}}/>)}
+          <style>{`@keyframes fall{0%{top:-5%;transform:rotate(0deg)}100%{top:110%;transform:translateY(100vh) rotate(720deg)}}`}</style>
         </div>
       )}
 
-      {}
-      <div className="fixed bottom-6 right-6 z-50 space-y-3 max-w-sm w-full pointer-events-none">
-        {notifications.map((n) => (
-          <div
-            key={n.id}
-            className={`p-4 rounded-2xl shadow-xl border flex items-start gap-3 pointer-events-auto transform transition-all duration-350 translate-y-0 animate-bounce-short ${
-              n.type === 'success' ? 'bg-emerald-900 border-emerald-700 text-emerald-100' :
-              n.type === 'warning' ? 'bg-amber-900 border-amber-700 text-amber-100' :
-              'bg-slate-900 border-slate-700 text-slate-100'
-            }`}
-          >
-            <span className="text-lg">
-              {n.type === 'success' ? '✨' : n.type === 'warning' ? '⚠️' : 'ℹ️'}
-            </span>
-            <p className="text-xs font-semibold leading-relaxed flex-1">{n.text}</p>
+      {/* Toasts */}
+      <div className="fixed bottom-20 left-3 right-3 sm:bottom-6 sm:left-auto sm:right-5 sm:max-w-sm z-50 space-y-2 pointer-events-none">
+        {toasts.map(n=>(
+          <div key={n.id} className={`p-4 rounded-2xl shadow-2xl flex items-start gap-3 pointer-events-auto ${n.type==='success'?'bg-emerald-900 border border-emerald-700 text-emerald-100':n.type==='warning'?'bg-amber-900 border border-amber-700 text-amber-100':'bg-slate-900 border border-slate-700 text-slate-100'}`}>
+            <span className="text-lg flex-shrink-0">{n.type==='success'?'✨':n.type==='warning'?'⚠️':'ℹ️'}</span>
+            <p className="text-sm font-semibold leading-snug">{n.text}</p>
           </div>
         ))}
       </div>
 
-      {}
-      <header className="sticky top-0 bg-white/95 backdrop-blur-md border-b border-slate-100 z-40 transition-all">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-18 flex items-center justify-between">
-          
-          {/* Logo */}
-          <button 
-            onClick={() => { setCurrentView('home'); setSelectedBook(null); }}
-            className="flex items-center gap-2.5 group text-left focus:outline-none"
-          >
-            <span className="text-3xl bg-indigo-550 p-2 rounded-2xl bg-gradient-to-tr from-indigo-600 to-violet-600 shadow-lg shadow-indigo-100 text-white transform group-hover:rotate-6 transition-all">📚</span>
-            <div>
-              <span className="text-xl font-black text-slate-900 tracking-tight block">BookLoop</span>
-              <span className="text-[10px] text-indigo-600 font-extrabold tracking-widest uppercase -mt-1 block">Secondhand Hub</span>
+      {/* TOP HEADER */}
+      <header className="sticky top-0 bg-white border-b border-slate-200 z-40" style={{boxShadow:'0 1px 3px rgba(0,0,0,0.06)'}}>
+        <div className="max-w-7xl mx-auto px-4 h-14 flex items-center justify-between">
+          <button onClick={()=>nav('home')} className="flex items-center gap-2.5 group">
+            <span className="text-2xl bg-gradient-to-tr from-indigo-600 to-violet-600 w-9 h-9 rounded-xl flex items-center justify-center transform group-active:scale-95 transition-all">📚</span>
+            <div className="leading-none">
+              <span className="text-lg font-black text-slate-900 tracking-tight block">BookLoop</span>
+              <span className="text-[9px] text-indigo-500 font-extrabold tracking-widest uppercase block leading-none">Pakistan</span>
             </div>
           </button>
-
-          {/* Nav Items */}
-          <nav className="flex items-center gap-2 sm:gap-4">
-            <button
-              onClick={() => { setCurrentView('home'); setSelectedBook(null); }}
-              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-                currentView === 'home' 
-                  ? 'bg-indigo-50 text-indigo-700' 
-                  : 'text-slate-600 hover:bg-slate-50'
-              }`}
-            >
-              Marketplace
-            </button>
-
-            <button
-              onClick={() => { setCurrentView('dashboard'); setSelectedBook(null); }}
-              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
-                currentView === 'dashboard' 
-                  ? 'bg-indigo-50 text-indigo-700' 
-                  : 'text-slate-600 hover:bg-slate-50'
-              }`}
-            >
-              <span>My Studio</span>
-              <span className="inline-block w-1.5 h-1.5 bg-indigo-500 rounded-full"></span>
-            </button>
-
-            <button
-              onClick={() => { setCurrentView('checkout'); setSelectedBook(null); }}
-              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 relative border ${
-                currentView === 'checkout' 
-                  ? 'bg-indigo-600 text-white border-indigo-600' 
-                  : 'border-slate-200 text-slate-700 hover:bg-slate-50'
-              }`}
-            >
-              <span>🛒 Checkout</span>
-              {cart.length > 0 && (
-                <span className="absolute -top-1.5 -right-1.5 bg-rose-500 text-white text-[10px] font-black w-5 h-5 rounded-full flex items-center justify-center animate-pulse">
-                  {cart.length}
-                </span>
-              )}
-            </button>
-          </nav>
-
+          {/* Wallet chip — always visible */}
+          <button onClick={()=>nav('wallet')} className="flex items-center gap-1.5 bg-gradient-to-r from-indigo-50 to-violet-50 border border-indigo-200 text-indigo-700 px-3 py-1.5 rounded-full text-xs font-bold active:scale-95 transition-all">
+            <span>💰</span>
+            <span>{pkr(wallet.balance)}</span>
+          </button>
         </div>
       </header>
 
-      {/* Main Container */}
       <main className="flex-1">
 
-        {}
-        {currentView === 'home' && !selectedBook && (
+        {/* ══════════════ HOME ══════════════ */}
+        {view==='home'&&(
           <div>
-            {/* Hero banner */}
-            <section className="bg-gradient-to-b from-slate-100 to-slate-50 py-16 px-4 border-b border-slate-200/50">
-              <div className="max-w-5xl mx-auto text-center space-y-6">
-                <span className="inline-flex items-center gap-2 bg-indigo-50 text-indigo-800 text-[11px] font-extrabold uppercase px-3.5 py-1.5 rounded-full tracking-wider border border-indigo-100/50">
-                  🌱 20% platform commission supports clean earth recycling
-                </span>
-                <h1 className="text-4xl sm:text-6xl font-extrabold text-slate-900 tracking-tight leading-none">
-                  Sell Your Books, <br className="hidden sm:inline" />
-                  <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-violet-600">Keep 80% of Profits!</span>
-                </h1>
-                <p className="text-slate-600 text-sm sm:text-lg max-w-2xl mx-auto leading-relaxed">
-                  Upload your pre-loved textbooks, fiction, and journals. Buy verified books with instant secure online checkout, and pass on the magic of storytelling!
-                </p>
-                
-                <div className="flex flex-wrap items-center justify-center gap-4 pt-4">
-                  <button
-                    onClick={() => setCurrentView('dashboard')}
-                    className="px-6 py-3 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-extrabold rounded-xl shadow-lg shadow-indigo-200 hover:scale-102 transition-all text-xs uppercase tracking-wide"
-                  >
-                    List a Book Now
-                  </button>
-                  <a
-                    href="#directory"
-                    className="px-6 py-3 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 font-extrabold rounded-xl transition-all text-xs uppercase tracking-wide"
-                  >
-                    Browse Directory
-                  </a>
+            {/* Hero */}
+            <section className="bg-gradient-to-b from-indigo-950 to-slate-900 px-4 pt-8 pb-10 text-center">
+              <span className="inline-flex items-center gap-1.5 bg-white/10 text-indigo-200 text-xs font-bold px-3 py-1.5 rounded-full mb-4">
+                🌱 PKR · Escrow · 20% commission
+              </span>
+              <h1 className="text-3xl sm:text-5xl font-extrabold text-white tracking-tight leading-tight mb-3">
+                Buy & Sell Books<br/>
+                <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-300 to-violet-300">Across Pakistan</span>
+              </h1>
+              <p className="text-slate-300 text-sm max-w-xs mx-auto mb-6 leading-relaxed">
+                List your books in PKR. Funds held safe until delivery confirmed. Seller keeps 80%.
+              </p>
+              {/* Trust pills */}
+              <div className="flex flex-wrap justify-center gap-2 mb-7">
+                {[['🔒','Escrow'],['📱','WhatsApp'],['💰','PKR Wallet'],['✅','No Card']].map(([i,l])=>(
+                  <span key={l} className="bg-white/10 text-white text-xs font-bold px-3 py-1.5 rounded-full">{i} {l}</span>
+                ))}
+              </div>
+              <div className="flex flex-col sm:flex-row justify-center gap-3 max-w-xs mx-auto sm:max-w-none">
+                <button onClick={()=>nav('sell')} className="w-full sm:w-auto px-8 py-4 bg-gradient-to-r from-indigo-500 to-violet-500 text-white font-extrabold rounded-2xl shadow-lg text-base active:scale-95 transition-all">
+                  + List a Book
+                </button>
+                <a href="#dir" className="w-full sm:w-auto px-8 py-4 bg-white/10 border border-white/20 text-white font-bold rounded-2xl text-base text-center">
+                  Browse ↓
+                </a>
+              </div>
+            </section>
+
+            {/* Subscribe bar */}
+            <div className="bg-slate-800 px-4 py-4">
+              <form onSubmit={doSubscribe} className="max-w-md mx-auto flex gap-2">
+                <input type="email" placeholder="Get book alerts — your@email.com" value={subEmail} onChange={e=>setSubEmail(e.target.value)}
+                  className="flex-1 bg-slate-700 border border-slate-600 rounded-xl px-4 py-3 text-sm text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-400"/>
+                <button type="submit" className="bg-indigo-500 hover:bg-indigo-400 text-white font-bold text-sm px-4 py-3 rounded-xl flex-shrink-0 active:scale-95 transition-all">Subscribe</button>
+              </form>
+            </div>
+
+            {/* Search + Filters */}
+            <section id="dir" className="max-w-7xl mx-auto px-3 pt-4 pb-2 space-y-3">
+              <div className="bg-white rounded-2xl border border-slate-200 p-3 shadow-sm space-y-3">
+                {/* Search */}
+                <div className="relative">
+                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400">🔍</span>
+                  <input type="text" placeholder="Search title or author..." value={searchQuery} onChange={e=>setSearch(e.target.value)}
+                    className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none text-sm"/>
+                </div>
+                {/* Genre horizontal scroll */}
+                <div className="overflow-x-auto -mx-1 px-1 pb-1" style={{scrollbarWidth:'none'}}>
+                  <div className="flex gap-2 w-max">
+                    {GENRES.map(g=>(
+                      <button key={g} onClick={()=>setGenre(g)} className={`px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all active:scale-95 ${selGenre===g?'bg-slate-900 text-white':'bg-slate-100 text-slate-600'}`}>{g}</button>
+                    ))}
+                  </div>
+                </div>
+                {/* Condition + count */}
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">Condition:</span>
+                  {CONDITIONS.map(c=>(
+                    <button key={c} onClick={()=>setCond(c)} className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all active:scale-95 ${selCond===c?'bg-indigo-50 border-indigo-300 text-indigo-700 font-bold':'border-slate-200 text-slate-500'}`}>{c}</button>
+                  ))}
+                  <span className="ml-auto text-xs text-slate-400"><strong className="text-slate-700">{filteredBooks.length}</strong> books</span>
                 </div>
               </div>
             </section>
 
-            {/* Filter & Catalog Directory */}
-            <section id="directory" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 space-y-8">
-              
-              <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm space-y-5">
-                <div className="flex flex-col md:flex-row gap-4 justify-between items-stretch md:items-center">
-                  
-                  {/* Search Input */}
-                  <div className="relative flex-1">
-                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">🔍</span>
-                    <input
-                      type="text"
-                      placeholder="Search title, author, or keyword..."
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:outline-none text-xs font-semibold transition-all"
-                    />
-                  </div>
-
-                  {/* Filter Genres */}
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-[11px] font-extrabold text-slate-400 uppercase tracking-wider mr-1">Genre:</span>
-                    {GENRES.map((genre) => (
-                      <button
-                        key={genre}
-                        onClick={() => setSelectedGenre(genre)}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                          selectedGenre === genre
-                            ? 'bg-slate-900 text-white'
-                            : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                        }`}
-                      >
-                        {genre}
-                      </button>
-                    ))}
-                  </div>
-
-                </div>
-
-                <div className="flex flex-wrap items-center gap-4 pt-3 border-t border-slate-100">
-                  <div className="flex items-center gap-2">
-                    <span className="text-[11px] font-extrabold text-slate-400 uppercase tracking-wider">Condition:</span>
-                    {CONDITIONS.map((cond) => (
-                      <button
-                        key={cond}
-                        onClick={() => setSelectedCondition(cond)}
-                        className={`px-3.5 py-1 rounded-full text-xs font-medium transition-all border ${
-                          selectedCondition === cond
-                            ? 'bg-indigo-50 border-indigo-300 text-indigo-700 font-bold'
-                            : 'border-slate-200 text-slate-500 hover:bg-slate-50'
-                        }`}
-                      >
-                        {cond}
-                      </button>
-                    ))}
-                  </div>
-
-                  <p className="text-xs text-slate-400 ml-auto font-medium">
-                    Showing <strong className="text-slate-700">{filteredBooks.length}</strong> matching books
-                  </p>
-                </div>
-              </div>
-
-              {/* Books Grid */}
-              {filteredBooks.length === 0 ? (
-                <div className="bg-white rounded-3xl border border-slate-200 py-16 text-center space-y-4 max-w-lg mx-auto">
-                  <span className="text-5xl">📚</span>
-                  <h3 className="text-lg font-bold text-slate-800">No books found in this filter</h3>
-                  <p className="text-slate-500 text-xs leading-relaxed max-w-sm mx-auto">
-                    Try altering your keywords or lowering your selection restrictions. Alternatively, be the first to list a book in this space!
-                  </p>
-                  <button
-                    onClick={() => { setSelectedGenre('All'); setSelectedCondition('All'); setSearchQuery(''); }}
-                    className="text-xs font-extrabold text-indigo-600 hover:underline"
-                  >
-                    Reset Search Filters
-                  </button>
+            {/* Books Grid */}
+            <section className="max-w-7xl mx-auto px-3 py-3 pb-6">
+              {filteredBooks.length===0 ? (
+                <div className="bg-white rounded-2xl border border-slate-200 py-16 text-center">
+                  <div className="text-6xl mb-3">📭</div>
+                  <h3 className="text-lg font-bold text-slate-700">No books listed yet</h3>
+                  <p className="text-slate-400 text-sm mt-1">Be the first to sell!</p>
+                  <button onClick={()=>nav('sell')} className="mt-5 px-7 py-3.5 bg-indigo-600 text-white font-bold rounded-2xl text-sm active:scale-95 transition-all">List a Book</button>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                  {filteredBooks.map((book) => {
-                    const discount = Math.round(((book.originalPrice - book.price) / book.originalPrice) * 100);
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                  {filteredBooks.map(book=>{
+                    const {sellerNet}=calc(book.price);
                     return (
-                      <div 
-                        key={book.id}
-                        className="bg-white rounded-3xl border border-slate-200/80 hover:border-slate-300/90 overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 flex flex-col group"
-                      >
-                        {/* Simulated cover */}
-                        <div className={`h-52 bg-gradient-to-br ${book.coverBg} flex flex-col justify-between p-5 relative overflow-hidden shrink-0`}>
-                          <div className="flex justify-between items-start">
-                            <span className="bg-white/20 backdrop-blur-md text-white text-[10px] uppercase font-bold px-2.5 py-1 rounded-full">
-                              {book.genre}
-                            </span>
-                            {discount > 0 && (
-                              <span className="bg-emerald-500 text-white text-[10px] font-black px-2 py-0.5 rounded">
-                                Save {discount}%
-                              </span>
-                            )}
-                          </div>
-
-                          <div className="text-center py-4 transform group-hover:scale-110 transition-all duration-300">
-                            <span className="text-5xl block filter drop-shadow">{book.coverEmoji}</span>
-                          </div>
-
-                          <div className="text-[10px] bg-black/30 backdrop-blur-sm text-slate-100 rounded-lg p-1.5 text-center font-bold">
-                            Condition: <span className="text-white uppercase">{book.condition}</span>
-                          </div>
+                      <div key={book.id} className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm active:scale-98 transition-all flex flex-col">
+                        {/* Cover */}
+                        <div className="relative bg-slate-100 overflow-hidden" style={{aspectRatio:'3/4'}}>
+                          {book.coverImage
+                            ?<img src={book.coverImage} alt={book.title} className="w-full h-full object-cover"/>
+                            :<div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-indigo-100 to-violet-100 text-5xl">📖</div>
+                          }
+                          <span className="absolute top-2 left-2 bg-black/60 text-white text-[9px] font-bold px-2 py-0.5 rounded-full">{book.condition}</span>
+                          {book.city&&<div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent py-2 px-2"><p className="text-white text-[9px] font-bold truncate">📍 {book.city}</p></div>}
                         </div>
-
-                        {/* Card Content */}
-                        <div className="p-5 flex-1 flex flex-col justify-between space-y-4">
-                          <div className="space-y-1">
-                            <h3 className="font-extrabold text-slate-900 text-sm line-clamp-1 group-hover:text-indigo-600 transition-colors">
-                              {book.title}
-                            </h3>
-                            <p className="text-xs text-slate-500 font-medium">by {book.author}</p>
-                            <p className="text-[11px] text-slate-400 line-clamp-2 pt-1 leading-normal">
-                              {book.description}
-                            </p>
+                        {/* Info */}
+                        <div className="p-3 flex flex-col flex-1 justify-between">
+                          <div>
+                            <p className="font-extrabold text-slate-900 text-xs leading-tight line-clamp-2">{book.title}</p>
+                            <p className="text-[10px] text-slate-500 mt-0.5 truncate">by {book.author}</p>
                           </div>
-
-                          <div className="pt-2 border-t border-slate-50 flex items-center justify-between">
+                          <div className="mt-2.5 flex items-end justify-between gap-1">
                             <div>
-                              <div className="flex items-baseline gap-1.5">
-                                <span className="text-xl font-extrabold text-indigo-950">${book.price.toFixed(2)}</span>
-                                <span className="text-xs text-slate-400 line-through">${book.originalPrice.toFixed(2)}</span>
-                              </div>
-                              <span className="text-[9px] text-slate-400 block font-medium">Listed by {book.sellerName}</span>
+                              <p className="font-extrabold text-indigo-700 text-sm leading-none">{pkr(book.price)}</p>
+                              <p className="text-[9px] text-slate-400 mt-0.5">Seller gets {pkr(sellerNet)}</p>
                             </div>
-
-                            <button
-                              onClick={() => handleAddToCart(book)}
-                              className="px-3 py-2 bg-slate-900 hover:bg-indigo-600 text-white font-extrabold rounded-xl transition-all text-xs flex items-center gap-1.5"
-                            >
-                              <span>Buy</span>
-                              <span>+</span>
-                            </button>
+                            <button onClick={()=>openCheckout(book)} className="bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold text-xs px-3 py-2 rounded-xl transition-all active:scale-95 flex-shrink-0">Buy</button>
                           </div>
                         </div>
                       </div>
@@ -609,678 +285,305 @@ export default function App() {
                   })}
                 </div>
               )}
-
             </section>
           </div>
         )}
 
-        {}
-        {selectedBook && (
-          <section className="max-w-4xl mx-auto px-4 py-12">
-            <button
-              onClick={() => setSelectedBook(null)}
-              className="mb-6 inline-flex items-center gap-2 text-xs font-bold text-slate-600 hover:text-indigo-600"
-            >
-              ← Back to Marketplace
-            </button>
+        {/* ══════════════ SELL ══════════════ */}
+        {view==='sell'&&(
+          <section className="max-w-lg mx-auto px-4 py-6">
+            <h1 className="text-2xl font-extrabold text-slate-900 mb-1">List Your Book</h1>
+            <p className="text-slate-500 text-sm mb-5">You keep 80% · Platform takes 20%</p>
+            <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
+              <form onSubmit={listBook} className="space-y-4">
 
-            <div className="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-xl grid grid-cols-1 md:grid-cols-12 gap-8 p-6 sm:p-8">
-              
-              {/* Left Cover Block */}
-              <div className="md:col-span-5 flex flex-col items-center">
-                <div className={`w-full max-w-[280px] h-96 bg-gradient-to-br ${selectedBook.coverBg} rounded-3xl flex flex-col justify-between p-6 shadow-md text-center`}>
-                  <span className="bg-white/20 text-white text-[10px] uppercase font-bold px-3 py-1 rounded-full self-start">
-                    {selectedBook.genre}
-                  </span>
-                  <span className="text-8xl my-auto block filter drop-shadow">{selectedBook.coverEmoji}</span>
-                  <div className="bg-black/25 text-white py-2 rounded-xl text-xs uppercase font-bold">
-                    Condition: {selectedBook.condition}
-                  </div>
-                </div>
-              </div>
+                <div><label className="block text-xs font-bold text-slate-500 mb-1.5 uppercase tracking-wide">Book Title *</label>
+                <input type="text" placeholder="The Alchemist" value={sTitle} onChange={e=>setSTitle(e.target.value)} className={inp}/></div>
 
-              {/* Right Description Block */}
-              <div className="md:col-span-7 flex flex-col justify-between space-y-6">
-                <div className="space-y-4">
-                  <div>
-                    <span className="text-[10px] bg-indigo-50 text-indigo-700 font-extrabold px-3 py-1 rounded-full uppercase tracking-wider">
-                      Book Directory File
-                    </span>
-                    <h1 className="text-3xl font-extrabold text-slate-950 mt-2">{selectedBook.title}</h1>
-                    <p className="text-slate-500 font-semibold text-sm mt-1">Written by {selectedBook.author}</p>
-                  </div>
+                <div><label className="block text-xs font-bold text-slate-500 mb-1.5 uppercase tracking-wide">Author *</label>
+                <input type="text" placeholder="Paulo Coelho" value={sAuth} onChange={e=>setSAuth(e.target.value)} className={inp}/></div>
 
-                  <p className="text-slate-600 text-sm leading-relaxed">{selectedBook.description}</p>
-                  
-                  <div className="grid grid-cols-2 gap-4 bg-slate-50 rounded-2xl p-4 text-xs font-medium">
-                    <div>
-                      <span className="text-slate-400 block uppercase text-[10px] font-bold">Date Listed</span>
-                      <strong className="text-slate-700">{selectedBook.listedAt}</strong>
-                    </div>
-                    <div>
-                      <span className="text-slate-400 block uppercase text-[10px] font-bold">Seller Profile</span>
-                      <strong className="text-slate-700">{selectedBook.sellerName}</strong>
-                    </div>
-                  </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div><label className="block text-xs font-bold text-slate-500 mb-1.5 uppercase tracking-wide">Genre</label>
+                  <select value={sGenre} onChange={e=>setSGenre(e.target.value)} className={inp}>
+                    {GENRES.slice(1).map(g=><option key={g}>{g}</option>)}
+                  </select></div>
+                  <div><label className="block text-xs font-bold text-slate-500 mb-1.5 uppercase tracking-wide">Condition</label>
+                  <select value={sCond} onChange={e=>setSCond(e.target.value)} className={inp}>
+                    {CONDITIONS.slice(1).map(c=><option key={c}>{c}</option>)}
+                  </select></div>
                 </div>
 
-                <div className="pt-4 border-t border-slate-100 flex items-center justify-between gap-6">
-                  <div>
-                    <span className="text-slate-400 text-xs block font-bold">Lister Price</span>
-                    <div className="flex items-baseline gap-2">
-                      <span className="text-3xl font-black text-indigo-950">${selectedBook.price.toFixed(2)}</span>
-                      <span className="text-slate-400 line-through text-sm">${selectedBook.originalPrice.toFixed(2)}</span>
-                    </div>
-                  </div>
-
-                  <div className="flex gap-3">
-                    <button
-                      onClick={() => handleAddToCart(selectedBook)}
-                      className="px-6 py-3.5 bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold rounded-xl shadow-lg shadow-indigo-200 text-xs uppercase tracking-wider transition-all"
-                    >
-                      Add To Shopping Queue
-                    </button>
-                    <button
-                      onClick={() => setSelectedBook(null)}
-                      className="px-4 py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold rounded-xl text-xs transition-all"
-                    >
-                      Cancel
-                    </button>
-                  </div>
+                {/* Price breakdown */}
+                <div className="bg-indigo-50 rounded-2xl p-4 border border-indigo-100">
+                  <label className="block text-xs font-bold text-slate-500 mb-1.5 uppercase tracking-wide">Asking Price (PKR) *</label>
+                  <input type="number" inputMode="numeric" placeholder="500" value={sPrice} onChange={e=>setSPrice(e.target.value)} min="50" className={inp}/>
+                  {sPrice&&parseInt(sPrice)>=50&&(()=>{
+                    const {commission,sellerNet}=calc(parseInt(sPrice));
+                    return(
+                      <div className="mt-3 space-y-1.5 text-sm border-t border-indigo-200 pt-3">
+                        <div className="flex justify-between text-slate-600"><span>Platform (20%)</span><span className="font-bold text-rose-500">−{pkr(commission)}</span></div>
+                        <div className="flex justify-between font-extrabold text-base"><span>You receive</span><span className="text-emerald-600">{pkr(sellerNet)}</span></div>
+                      </div>
+                    );
+                  })()}
                 </div>
 
-              </div>
+                <div><label className="block text-xs font-bold text-slate-500 mb-1.5 uppercase tracking-wide">WhatsApp Number * <span className="normal-case font-normal">(buyer contacts you here)</span></label>
+                <input type="tel" inputMode="tel" placeholder="+92 300 1234567" value={sPhone} onChange={e=>setSPhone(e.target.value)} className={inp}/></div>
 
+                <div><label className="block text-xs font-bold text-slate-500 mb-1.5 uppercase tracking-wide">City / Area</label>
+                <input type="text" placeholder="Lahore, DHA Phase 4" value={sCity} onChange={e=>setSCity(e.target.value)} className={inp}/></div>
+
+                {/* Photo upload */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 mb-1.5 uppercase tracking-wide">Book Cover Photo</label>
+                  <label className={`flex flex-col items-center justify-center border-2 border-dashed rounded-2xl py-7 px-4 cursor-pointer transition-all text-center active:scale-98 ${sCover?'border-indigo-400 bg-indigo-50':'border-slate-300 bg-slate-50 hover:border-indigo-400'}`}>
+                    {sCover
+                      ?<><img src={sCover} alt="preview" className="h-32 object-contain rounded-xl mb-2"/><span className="text-sm text-indigo-600 font-bold">Tap to change photo</span></>
+                      :<><span className="text-5xl mb-2">📷</span><span className="text-base font-bold text-slate-600">Tap to upload photo</span><span className="text-sm text-slate-400 mt-1">JPG, PNG — max 2MB</span></>
+                    }
+                    <input type="file" accept="image/*" className="hidden" onChange={e=>{
+                      const f=e.target.files[0]; if(!f) return;
+                      if(f.size>2*1024*1024){toast('Max 2MB image.','warning');return;}
+                      const r=new FileReader(); r.onload=ev=>setSCover(ev.target.result); r.readAsDataURL(f);
+                    }}/>
+                  </label>
+                  {sCover&&<button type="button" onClick={()=>setSCover(null)} className="mt-1.5 text-sm text-red-500 font-bold">Remove photo</button>}
+                </div>
+
+                <div><label className="block text-xs font-bold text-slate-500 mb-1.5 uppercase tracking-wide">Description</label>
+                <textarea rows={3} placeholder="Condition notes, edition, etc." value={sDesc} onChange={e=>setSDesc(e.target.value)} className={inp+' resize-none'}/></div>
+
+                <button type="submit" className="w-full py-4 bg-gradient-to-r from-indigo-600 to-violet-600 text-white font-extrabold rounded-2xl shadow-md text-base uppercase tracking-wide active:scale-95 transition-all">
+                  Publish Listing
+                </button>
+              </form>
             </div>
           </section>
         )}
 
-        {}
-        {currentView === 'checkout' && (
-          <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-            <h1 className="text-3xl font-extrabold text-slate-900 mb-8 flex items-center gap-3">
-              <span>Checkout Counter</span>
-              <span className="bg-indigo-100 text-indigo-800 text-xs font-extrabold px-3 py-1.5 rounded-full">{cart.length} Books Selected</span>
-            </h1>
-
-            {paymentReceipt ? (
-              <div className="bg-white rounded-3xl border border-emerald-200 p-8 text-center max-w-xl mx-auto shadow-xl space-y-6">
-                <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto text-3xl">✓</div>
+        {/* ══════════════ CHECKOUT ══════════════ */}
+        {view==='checkout'&&(
+          <section className="max-w-lg mx-auto px-4 py-6">
+            {placed?(
+              <div className="bg-white rounded-2xl border border-emerald-200 p-6 text-center shadow-xl space-y-5">
+                <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto text-4xl">✓</div>
                 <div>
-                  <h3 className="text-2xl font-extrabold text-slate-900">Payment Approved!</h3>
-                  <p className="text-slate-500 text-sm mt-1">Receipt reference: <strong className="font-mono text-slate-700">{paymentReceipt.id}</strong></p>
+                  <h3 className="text-2xl font-extrabold text-slate-900">Order Placed!</h3>
+                  <p className="text-slate-400 text-sm mt-1">#{placed.id}</p>
                 </div>
-
-                <div className="divide-y divide-slate-100 bg-slate-50 rounded-2xl p-6 text-left text-xs space-y-3">
-                  <div className="flex justify-between text-slate-500">
-                    <span>Payment Date:</span>
-                    <span className="font-semibold text-slate-800">{paymentReceipt.date}</span>
-                  </div>
-                  <div className="flex justify-between text-slate-500 pt-3">
-                    <span>Card Charged:</span>
-                    <span className="font-semibold text-slate-800">•••• •••• •••• {paymentReceipt.cardLast4}</span>
-                  </div>
-                  <div className="flex justify-between text-slate-500 pt-3">
-                    <span>Admin Commission Received (20%):</span>
-                    <span className="font-extrabold text-indigo-600">${paymentReceipt.adminFee.toFixed(2)}</span>
-                  </div>
-                  <div className="flex justify-between text-slate-500 pt-3">
-                    <span>Seller Revenue Shared (80%):</span>
-                    <span className="font-semibold text-emerald-600">${paymentReceipt.sellerPayout.toFixed(2)}</span>
-                  </div>
-                  <div className="flex justify-between text-slate-900 pt-3 text-sm font-extrabold">
-                    <span>Total Charged:</span>
-                    <span>${paymentReceipt.total.toFixed(2)}</span>
-                  </div>
+                <div className="bg-slate-50 rounded-2xl p-4 text-left space-y-3">
+                  {[['Book',placed.bookTitle],['Amount',pkr(placed.price)],['Deliver to',placed.buyerAddress],['Payment',placed.payMethod]].map(([k,v])=>(
+                    <div key={k} className="flex justify-between gap-4"><span className="text-slate-400 text-sm flex-shrink-0">{k}</span><span className="font-bold text-sm text-right break-words max-w-[65%]">{v}</span></div>
+                  ))}
                 </div>
-
-                <div className="text-xs text-slate-400">
-                  These books have been added to your Library under your "My Studio" control dashboard.
+                <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4 text-sm text-blue-800 text-left leading-relaxed">
+                  📱 Seller will WhatsApp you on <strong>{placed.buyerPhone}</strong>. After you receive the book, go to <strong>Orders</strong> → tap <strong>Confirm Delivery</strong> to release funds.
                 </div>
-
-                <div className="flex gap-4">
-                  <button
-                    onClick={() => { setPaymentReceipt(null); setCurrentView('home'); }}
-                    className="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 rounded-xl transition-all text-xs"
-                  >
-                    Browse More Books
-                  </button>
-                  <button
-                    onClick={() => { setPaymentReceipt(null); setCurrentView('dashboard'); }}
-                    className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold py-3 rounded-xl transition-all text-xs"
-                  >
-                    View Purchased Library
-                  </button>
+                <div className="grid grid-cols-2 gap-3">
+                  <button onClick={()=>nav('home')} className="py-4 bg-indigo-600 text-white font-bold rounded-2xl text-sm active:scale-95 transition-all">Browse More</button>
+                  <button onClick={()=>nav('orders')} className="py-4 bg-slate-100 text-slate-800 font-bold rounded-2xl text-sm active:scale-95 transition-all">My Orders</button>
                 </div>
               </div>
-            ) : cart.length === 0 ? (
-              <div className="bg-white rounded-3xl border border-slate-200 py-16 px-4 text-center max-w-xl mx-auto">
-                <div className="text-6xl mb-4">🛒</div>
-                <h3 className="text-xl font-bold text-slate-800">Your checkout queue is currently empty</h3>
-                <p className="text-slate-500 text-sm mt-2">Browse the marketplace directory to discover stellar pre-loved books starting at low prices.</p>
-                <button
-                  onClick={() => setCurrentView('home')}
-                  className="mt-6 px-6 py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-xl transition-all"
-                >
-                  Return to Home
-                </button>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-                
-                {/* Cart list items */}
-                <div className="lg:col-span-7 space-y-4">
-                  {cart.map((item) => (
-                    <div
-                      key={item.id}
-                      className="bg-white rounded-2xl border border-slate-200/85 p-5 flex items-center gap-4 hover:shadow-md transition-all relative overflow-hidden"
-                    >
-                      <div className={`w-16 h-20 rounded-xl ${item.coverBg} flex items-center justify-center text-3xl shrink-0`}>
-                        {item.coverEmoji}
-                      </div>
+            ):cbk?(
+              <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xl">
+                <h2 className="text-xl font-extrabold text-slate-900 mb-0.5">Checkout</h2>
+                <p className="text-slate-500 text-sm mb-5 truncate">Buying: <strong>{cbk.title}</strong></p>
 
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="text-[9px] uppercase font-bold text-indigo-600 tracking-wide">{item.genre}</span>
-                          <span className="text-[9px] bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded uppercase font-bold">{item.condition}</span>
-                        </div>
-                        <h3 className="font-bold text-slate-900 text-sm line-clamp-1 mt-0.5">{item.title}</h3>
-                        <p className="text-xs text-slate-500">by {item.author}</p>
-                        <p className="text-[11px] text-slate-400 mt-1">Listed by {item.sellerName}</p>
-                      </div>
-
-                      <div className="text-right flex flex-col items-end gap-2">
-                        <span className="font-extrabold text-lg text-indigo-950">${item.price.toFixed(2)}</span>
-                        <button
-                          onClick={() => handleRemoveFromCart(item.id)}
-                          className="text-[11px] font-bold text-rose-500 hover:text-rose-700 hover:underline cursor-pointer"
-                        >
-                          Remove
-                        </button>
-                      </div>
+                {/* Steps */}
+                <div className="flex mb-6">
+                  {['Delivery','Payment','Confirm'].map((s,i)=>(
+                    <div key={s} className={`flex-1 text-center text-xs pb-2.5 border-b-2 font-bold ${cStep===i+1?'border-indigo-500 text-indigo-600':cStep>i+1?'border-emerald-500 text-emerald-600':'border-slate-200 text-slate-400'}`}>
+                      {cStep>i+1?'✓ ':''}{s}
                     </div>
                   ))}
                 </div>
 
-                {/* Pricing summary & Secure card gateway form */}
-                <div className="lg:col-span-5 space-y-6">
-                  <div className="bg-white rounded-2xl border border-slate-200 p-6 sm:p-8 space-y-6">
-                    <h3 className="font-extrabold text-slate-900 text-lg">Purchase Order Summary</h3>
-                    
-                    <div className="space-y-3.5 border-b border-slate-100 pb-5 text-sm">
-                      <div className="flex justify-between text-slate-600">
-                        <span>Subtotal ({cart.length} items)</span>
-                        <span className="font-bold text-slate-900">${cart.reduce((acc, item) => acc + item.price, 0).toFixed(2)}</span>
-                      </div>
-
-                      <div className="flex justify-between text-slate-600 text-xs">
-                        <span>Packing & Shipping Fees</span>
-                        <span className="text-emerald-600 font-bold uppercase">Free Eco-Shipping</span>
-                      </div>
-
-                      {/* Highly visible 20% Commission alert block */}
-                      <div className="bg-indigo-50/70 rounded-2xl p-4 border border-indigo-100 space-y-2">
-                        <p className="font-bold text-xs text-indigo-900 flex items-center gap-1.5">
-                          <span className="text-base">🚀</span> Platform Fee Breakdown
-                        </p>
-                        <p className="text-[11px] text-slate-600 leading-normal">
-                          Your purchase supports sustainability! A <strong>20% platform commission ($
-                          {cart.reduce((acc, item) => acc + calculateCommission(item.price), 0).toFixed(2)}
-                          )</strong> is taken from the total to keep BookLoop running. The remainder gets dispatched instantly to individual sellers.
-                        </p>
-                        <div className="h-px bg-indigo-200/50 my-1"></div>
-                        <div className="flex justify-between text-[11px] text-indigo-950">
-                          <span>Combined Seller Payouts (80%):</span>
-                          <span className="font-bold">${cart.reduce((acc, item) => acc + calculateSellerShare(item.price), 0).toFixed(2)}</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Credit Card Details Inputs */}
-                    <div className="space-y-4">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold text-slate-700 uppercase tracking-wide">Credit or Debit Card</span>
-                        <span className="text-[10px] text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded font-semibold flex items-center gap-1">
-                          🔒 Secure Encrypted
-                        </span>
-                      </div>
-
-                      <div className="space-y-3">
-                        <div>
-                          <label className="block text-[10px] uppercase font-bold text-slate-400 mb-1">Cardholder Name</label>
-                          <input
-                            type="text"
-                            value={cardName}
-                            onChange={(e) => setCardName(e.target.value)}
-                            placeholder="John Doe"
-                            disabled={isProcessingPayment}
-                            className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:outline-none transition-all text-sm font-semibold"
-                          />
-                        </div>
-
-                        <div>
-                          <label className="block text-[10px] uppercase font-bold text-slate-400 mb-1">Card Number</label>
-                          <input
-                            type="text"
-                            value={cardNumber}
-                            onChange={handleCardNumberChange}
-                            placeholder="4000 1234 5678 9010"
-                            disabled={isProcessingPayment}
-                            className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:outline-none transition-all text-sm font-mono tracking-widest"
-                          />
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-3">
-                          <div>
-                            <label className="block text-[10px] uppercase font-bold text-slate-400 mb-1">Expiry Date</label>
-                            <input
-                              type="text"
-                              value={cardExpiry}
-                              onChange={handleExpiryChange}
-                              placeholder="MM/YY"
-                              disabled={isProcessingPayment}
-                              className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:outline-none transition-all text-sm font-semibold text-center"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-[10px] uppercase font-bold text-slate-400 mb-1">CVV / CVC</label>
-                            <input
-                              type="password"
-                              value={cardCvc}
-                              onChange={handleCvcChange}
-                              placeholder="•••"
-                              disabled={isProcessingPayment}
-                              className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:outline-none transition-all text-sm font-mono text-center"
-                            />
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Complete Checkout Button */}
-                    <button
-                      onClick={handleCheckoutComplete}
-                      disabled={isProcessingPayment}
-                      className="w-full bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-extrabold py-4 rounded-xl shadow-lg shadow-indigo-200 hover:scale-101 transition-all flex items-center justify-center gap-2 text-sm uppercase tracking-wider disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {isProcessingPayment ? (
-                        <>
-                          <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                          Processing Secured Payment...
-                        </>
-                      ) : (
-                        `Pay & Authorize Order • $${cart.reduce((acc, item) => acc + item.price, 0).toFixed(2)}`
-                      )}
+                {cStep===1&&(
+                  <div className="space-y-4">
+                    <div><label className="block text-xs font-bold text-slate-500 mb-1.5 uppercase tracking-wide">Full Name *</label>
+                    <input type="text" placeholder="Muhammad Ali" value={bName} onChange={e=>setBName(e.target.value)} className={inp}/></div>
+                    <div><label className="block text-xs font-bold text-slate-500 mb-1.5 uppercase tracking-wide">Delivery Address *</label>
+                    <textarea rows={3} placeholder="House No, Street, Block, Area, City" value={bAddr} onChange={e=>setBAddr(e.target.value)} className={inp+' resize-none'}/></div>
+                    <div><label className="block text-xs font-bold text-slate-500 mb-1.5 uppercase tracking-wide">WhatsApp Number *</label>
+                    <input type="tel" inputMode="tel" placeholder="+92 300 1234567" value={bPhone} onChange={e=>setBPhone(e.target.value)} className={inp}/></div>
+                    <button onClick={()=>{if(!bName.trim()||!bAddr.trim()||!bPhone.trim()){toast('Fill all fields.','warning');return;}setCStep(2);}}
+                      className="w-full py-4 bg-indigo-600 text-white font-extrabold rounded-2xl text-base active:scale-95 transition-all">
+                      Continue →
                     </button>
                   </div>
-                </div>
+                )}
 
+                {cStep===2&&(
+                  <div className="space-y-4">
+                    <p className="text-sm text-slate-500 font-medium">How will you pay?</p>
+                    <div className="grid grid-cols-3 gap-2">
+                      {[['EasyPaisa','📱'],['JazzCash','💚'],['Bank Transfer','🏦']].map(([m,i])=>(
+                        <button key={m} onClick={()=>setPayM(m)} className={`border-2 rounded-2xl p-4 text-xs font-bold text-center transition-all active:scale-95 ${payM===m?'border-indigo-500 bg-indigo-50 text-indigo-700':'border-slate-200 text-slate-600'}`}>
+                          <div className="text-3xl mb-1.5">{i}</div>{m}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="bg-slate-50 rounded-2xl p-4 space-y-2.5">
+                      {[['Book price',pkr(cbk.price)],['Platform fee (incl.)',pkr(calc(cbk.price).commission)]].map(([k,v])=>(
+                        <div key={k} className="flex justify-between text-sm text-slate-500"><span>{k}</span><span className="font-bold text-slate-800">{v}</span></div>
+                      ))}
+                      <div className="flex justify-between font-extrabold border-t border-slate-200 pt-2.5 text-lg"><span>Total</span><span className="text-indigo-700">{pkr(cbk.price)}</span></div>
+                    </div>
+                    <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 text-sm text-emerald-800">🔒 Funds held in escrow until you confirm delivery.</div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <button onClick={()=>setCStep(1)} className="py-4 bg-slate-100 text-slate-700 font-bold rounded-2xl text-sm active:scale-95 transition-all">← Back</button>
+                      <button onClick={()=>setCStep(3)} className="py-4 bg-indigo-600 text-white font-extrabold rounded-2xl text-sm active:scale-95 transition-all">Review →</button>
+                    </div>
+                  </div>
+                )}
+
+                {cStep===3&&(
+                  <div className="space-y-4">
+                    <div className="bg-slate-50 rounded-2xl p-4 space-y-2.5">
+                      {[['Book',cbk.title],['Name',bName],['Address',bAddr],['Contact',bPhone],['Payment',payM]].map(([k,v])=>(
+                        <div key={k} className="flex justify-between gap-4 text-sm"><span className="text-slate-400 flex-shrink-0">{k}</span><span className="font-bold text-right break-words max-w-[65%]">{v}</span></div>
+                      ))}
+                      <div className="flex justify-between font-extrabold border-t border-slate-200 pt-2.5 text-lg"><span>Total</span><span className="text-indigo-700">{pkr(cbk.price)}</span></div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <button onClick={()=>setCStep(2)} className="py-4 bg-slate-100 text-slate-700 font-bold rounded-2xl text-sm active:scale-95 transition-all">← Back</button>
+                      <button onClick={placeOrder} className="py-4 bg-gradient-to-r from-indigo-600 to-violet-600 text-white font-extrabold rounded-2xl text-sm active:scale-95 transition-all">Confirm & Pay ✓</button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ):(
+              <div className="text-center py-20">
+                <div className="text-6xl mb-4">🛒</div>
+                <h3 className="text-lg font-bold">No book selected</h3>
+                <button onClick={()=>nav('home')} className="mt-5 px-7 py-3.5 bg-indigo-600 text-white font-bold rounded-2xl text-sm active:scale-95 transition-all">Browse Books</button>
               </div>
             )}
           </section>
         )}
 
-        {}
-        {currentView === 'dashboard' && (
-          <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 space-y-12">
-            
-            {/* Header greeting */}
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-gradient-to-r from-slate-900 to-indigo-950 text-white rounded-3xl p-6 sm:p-8 shadow-lg">
-              <div>
-                <span className="bg-indigo-500 text-white text-[10px] uppercase font-bold px-3 py-1 rounded-full">
-                  Verified Publisher Account
-                </span>
-                <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight mt-2">{currentUser.name}</h2>
-                <p className="text-indigo-200 text-xs mt-1">Track your active listings, list custom books, and check on-chain or platform payouts.</p>
+        {/* ══════════════ ORDERS ══════════════ */}
+        {view==='orders'&&(
+          <section className="max-w-2xl mx-auto px-4 py-6">
+            <h1 className="text-2xl font-extrabold text-slate-900 mb-5">My Orders</h1>
+            {orders.length===0?(
+              <div className="bg-white rounded-2xl border border-slate-200 py-16 text-center">
+                <div className="text-6xl mb-3">📦</div>
+                <h3 className="text-lg font-bold">No orders yet</h3>
+                <button onClick={()=>nav('home')} className="mt-5 px-7 py-3.5 bg-indigo-600 text-white font-bold rounded-2xl text-sm active:scale-95 transition-all">Browse Books</button>
               </div>
+            ):(
+              <div className="space-y-3">
+                {orders.map(order=>{
+                  const {commission}=calc(order.price);
+                  const badge=order.status==='Delivered'?'bg-emerald-100 text-emerald-700':order.status==='Processing'?'bg-amber-100 text-amber-700':'bg-blue-100 text-blue-700';
+                  return(
+                    <div key={order.id} className="bg-white rounded-2xl border border-slate-200 p-4">
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="min-w-0 flex-1 mr-3">
+                          <p className="text-[10px] text-slate-400">#{order.id} · {order.date}</p>
+                          <h3 className="font-extrabold text-slate-900 text-base leading-tight truncate">{order.bookTitle}</h3>
+                          <p className="text-xs text-slate-500">{order.bookAuthor}</p>
+                        </div>
+                        <span className={`text-xs font-bold px-3 py-1.5 rounded-full flex-shrink-0 ${badge}`}>{order.status}</span>
+                      </div>
+                      <div className="bg-slate-50 rounded-xl p-3 text-sm space-y-1.5 mb-3">
+                        {[['Amount',pkr(order.price)],['Deliver to',order.buyerAddress],['Payment',order.payMethod],['Seller',order.bookPhone]].map(([k,v])=>(
+                          <div key={k} className="flex justify-between gap-3"><span className="text-slate-400 flex-shrink-0">{k}</span><span className="font-bold text-right break-words max-w-[60%]">{v}</span></div>
+                        ))}
+                        <div className="flex justify-between gap-3 border-t border-slate-200 pt-1.5"><span className="text-slate-400">Commission (20%)</span><span className="font-bold text-emerald-600">{pkr(commission)}</span></div>
+                      </div>
+                      <div className="flex gap-2">
+                        {order.status==='Processing'&&(
+                          <button onClick={()=>confirmDelivery(order.id)} className="flex-1 py-3.5 bg-emerald-600 text-white font-bold rounded-xl text-sm active:scale-95 transition-all">✓ Confirm Delivery</button>
+                        )}
+                        <a href={`https://wa.me/${order.bookPhone.replace(/\D/g,'')}`} target="_blank" rel="noreferrer"
+                          className="px-4 py-3.5 bg-slate-100 text-slate-700 font-bold rounded-xl text-sm text-center active:scale-95 transition-all">💬 WhatsApp</a>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+        )}
 
-              <div className="flex gap-4 sm:gap-6">
-                <div className="bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/10">
-                  <span className="text-slate-300 text-[10px] uppercase block font-semibold">Active Listings</span>
-                  <span className="text-2xl font-black">{currentUser.listedBooks.length} Books</span>
-                </div>
-                <div className="bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/10">
-                  <span className="text-slate-300 text-[10px] uppercase block font-semibold">Library Purchases</span>
-                  <span className="text-2xl font-black">{currentUser.purchasedBooks.length} Books</span>
-                </div>
-              </div>
+        {/* ══════════════ WALLET ══════════════ */}
+        {view==='wallet'&&(
+          <section className="max-w-2xl mx-auto px-4 py-6 space-y-4">
+            {/* Balance card */}
+            <div className="bg-gradient-to-br from-indigo-900 to-violet-900 rounded-2xl p-6 text-white" style={{background:'linear-gradient(135deg,#1e1b4b,#4c1d95)'}}>
+              <p className="text-indigo-300 text-xs uppercase font-bold tracking-wider mb-2">Your BookLoop Wallet</p>
+              <p className="text-5xl font-black text-amber-400">{pkr(wallet.balance)}</p>
+              <p className="text-indigo-300 text-sm mt-1">Available balance · Withdraw anytime</p>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-              
-              {/* Left Column: List a book form */}
-              <div className="lg:col-span-5 bg-white rounded-3xl border border-slate-200 p-6 sm:p-8 space-y-6">
-                <div>
-                  <h3 className="text-lg font-extrabold text-slate-900">Upload Secondhand Book</h3>
-                  <p className="text-xs text-slate-500 mt-1">Specify detailed properties, set your asking price, and start selling instantly.</p>
-                </div>
-
-                <form onSubmit={handleAddBookListing} className="space-y-4">
-                  
-                  {/* Title & Author */}
-                  <div className="space-y-3.5">
-                    <div>
-                      <label className="block text-[10px] uppercase font-bold text-slate-500 mb-1">Book Title *</label>
-                      <input
-                        type="text"
-                        required
-                        placeholder="The Great Gatsby"
-                        value={newTitle}
-                        onChange={(e) => setNewTitle(e.target.value)}
-                        className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:outline-none text-xs font-semibold transition-all"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-[10px] uppercase font-bold text-slate-500 mb-1">Author Name *</label>
-                      <input
-                        type="text"
-                        required
-                        placeholder="F. Scott Fitzgerald"
-                        value={newAuthor}
-                        onChange={(e) => setNewAuthor(e.target.value)}
-                        className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:outline-none text-xs font-semibold transition-all"
-                      />
-                    </div>
+            {/* Withdraw form */}
+            <div className="bg-white rounded-2xl border border-slate-200 p-5">
+              <h3 className="font-extrabold text-slate-900 text-lg mb-4">Withdraw Funds</h3>
+              {wallet.balance===0?(
+                <p className="text-slate-400 text-sm">No balance yet. Earn commission when buyers confirm delivery.</p>
+              ):(
+                <form onSubmit={doWithdraw} className="space-y-4">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div><label className="block text-xs font-bold text-slate-500 mb-1.5 uppercase tracking-wide">Amount (PKR)</label>
+                    <input type="number" inputMode="numeric" placeholder="Enter amount" value={wAmt} onChange={e=>setWAmt(e.target.value)} max={wallet.balance} className={inp}/></div>
+                    <div><label className="block text-xs font-bold text-slate-500 mb-1.5 uppercase tracking-wide">Method</label>
+                    <select value={wMethod} onChange={e=>setWMeth(e.target.value)} className={inp}>
+                      <option>EasyPaisa</option><option>JazzCash</option><option>Bank Transfer</option>
+                    </select></div>
                   </div>
-
-                  {/* Genre & Condition dropdowns */}
-                  <div className="grid grid-cols-2 gap-3.5">
-                    <div>
-                      <label className="block text-[10px] uppercase font-bold text-slate-500 mb-1">Genre Category</label>
-                      <select
-                        value={newGenre}
-                        onChange={(e) => setNewGenre(e.target.value)}
-                        className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:outline-none text-xs font-bold transition-all text-slate-700"
-                      >
-                        {GENRES.slice(1).map(g => (
-                          <option key={g} value={g}>{g}</option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="block text-[10px] uppercase font-bold text-slate-500 mb-1">Physical Condition</label>
-                      <select
-                        value={newCondition}
-                        onChange={(e) => setNewCondition(e.target.value)}
-                        className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:outline-none text-xs font-bold transition-all text-slate-700"
-                      >
-                        {CONDITIONS.slice(1).map(c => (
-                          <option key={c} value={c}>{c}</option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-
-                  {/* Prices and live Commission dynamic calculator */}
-                  <div className="space-y-3.5 bg-indigo-50/50 rounded-2xl p-4 border border-indigo-100/75">
-                    <div className="grid grid-cols-2 gap-3.5">
-                      <div>
-                        <label className="block text-[10px] uppercase font-bold text-slate-500 mb-1">Asking Price ($) *</label>
-                        <input
-                          type="number"
-                          step="0.01"
-                          required
-                          placeholder="10.00"
-                          value={newPrice}
-                          onChange={(e) => setNewPrice(e.target.value)}
-                          className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none text-xs font-extrabold text-indigo-950 transition-all"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-[10px] uppercase font-bold text-slate-400 mb-1">Original Retail Price ($)</label>
-                        <input
-                          type="number"
-                          step="0.01"
-                          placeholder="22.50"
-                          value={newOriginalPrice}
-                          onChange={(e) => setNewOriginalPrice(e.target.value)}
-                          className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none text-xs font-semibold text-slate-600 transition-all"
-                        />
-                      </div>
-                    </div>
-
-                    {/* Live Commission Display */}
-                    {newPrice && parseFloat(newPrice) > 0 && (
-                      <div className="space-y-1 pt-2 text-[11px] border-t border-indigo-100/50">
-                        <div className="flex justify-between text-slate-600">
-                          <span>Platform Commission (20%):</span>
-                          <span className="font-extrabold text-rose-500">-${calculateCommission(parseFloat(newPrice)).toFixed(2)}</span>
-                        </div>
-                        <div className="flex justify-between text-indigo-950 font-extrabold text-xs">
-                          <span>Your Net Payout (80%):</span>
-                          <span className="text-emerald-600">${calculateSellerShare(parseFloat(newPrice)).toFixed(2)}</span>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Graphic Cover Customizer */}
-                  <div className="grid grid-cols-2 gap-3.5 pt-1">
-                    <div>
-                      <label className="block text-[10px] uppercase font-bold text-slate-500 mb-1">Cover Symbol/Emoji</label>
-                      <input
-                        type="text"
-                        maxLength={2}
-                        value={newEmoji}
-                        onChange={(e) => setNewEmoji(e.target.value)}
-                        placeholder="📖"
-                        className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-center text-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-[10px] uppercase font-bold text-slate-500 mb-1">Cover Color Palette</label>
-                      <select
-                        value={newBg}
-                        onChange={(e) => setNewBg(e.target.value)}
-                        className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all text-slate-700"
-                      >
-                        <option value="from-indigo-600 to-blue-500 text-white">Neon Indigo</option>
-                        <option value="from-amber-500 to-orange-600 text-white">Electric Orange</option>
-                        <option value="from-emerald-700 to-teal-800 text-emerald-100">Forest Emerald</option>
-                        <option value="from-rose-500 to-pink-600 text-white">Pastel Rose</option>
-                        <option value="from-slate-700 to-slate-900 text-slate-100">Deep Slate</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  {/* Brief description */}
-                  <div>
-                    <label className="block text-[10px] uppercase font-bold text-slate-500 mb-1">Item Description</label>
-                    <textarea
-                      rows={2}
-                      placeholder="e.g., Paperback, 2018 reprint. Minor scuffs on corner of the front jacket..."
-                      value={newDesc}
-                      onChange={(e) => setNewDesc(e.target.value)}
-                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:outline-none text-xs font-semibold transition-all leading-normal"
-                    ></textarea>
-                  </div>
-
-                  {/* Submission Trigger */}
-                  <button
-                    type="submit"
-                    className="w-full py-3.5 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-extrabold rounded-xl shadow-md transition-all uppercase tracking-wider text-xs"
-                  >
-                    Confirm & Publish Listing
+                  <div><label className="block text-xs font-bold text-slate-500 mb-1.5 uppercase tracking-wide">Mobile Number / IBAN</label>
+                  <input type="text" inputMode="tel" placeholder="+92 300 1234567 or IBAN" value={wAcc} onChange={e=>setWAcc(e.target.value)} className={inp}/></div>
+                  <button type="submit" className="w-full py-4 bg-gradient-to-r from-indigo-600 to-violet-600 text-white font-extrabold rounded-2xl text-base active:scale-95 transition-all">
+                    Withdraw Funds
                   </button>
-
                 </form>
+              )}
+            </div>
+
+            {/* Transaction history */}
+            <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+              <div className="px-5 py-4 border-b border-slate-100">
+                <h3 className="font-extrabold text-slate-900">Transaction History</h3>
               </div>
-
-              {/* Right Column: Active Listings & Library */}
-              <div className="lg:col-span-7 space-y-8">
-                
-                {/* Active Listings Container */}
-                <div className="bg-white rounded-3xl border border-slate-200 p-6 sm:p-8 space-y-6">
-                  <h3 className="text-lg font-extrabold text-slate-900 flex items-center justify-between">
-                    <span>Your Active Bookstore Listings</span>
-                    <span className="text-[10px] bg-slate-100 text-slate-600 px-3 py-1 rounded-full font-bold">
-                      {currentUser.listedBooks.length} Listed
-                    </span>
-                  </h3>
-
-                  {currentUser.listedBooks.length === 0 ? (
-                    <div className="bg-slate-50/50 rounded-2xl border border-dashed border-slate-200 py-12 px-4 text-center">
-                      <span className="text-4xl block mb-2">📥</span>
-                      <p className="text-xs font-bold text-slate-700">You haven't uploaded any books yet</p>
-                      <p className="text-[11px] text-slate-400 mt-1 max-w-xs mx-auto">
-                        Fill out the upload form on the left to start selling pre-loved books and receiving earnings instantly!
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="space-y-3 max-h-96 overflow-y-auto pr-2">
-                      {currentUser.listedBooks.map((item) => (
-                        <div
-                          key={item.id}
-                          className="p-3.5 bg-slate-50 border border-slate-100 rounded-xl flex items-center gap-3.5 hover:bg-white hover:border-slate-200 transition-all"
-                        >
-                          <div className={`w-11 h-14 rounded bg-gradient-to-br ${item.coverBg} flex items-center justify-center text-xl shrink-0`}>
-                            {item.coverEmoji}
-                          </div>
-
-                          <div className="flex-1 min-w-0">
-                            <h4 className="font-extrabold text-slate-900 text-xs truncate">{item.title}</h4>
-                            <p className="text-[10px] text-slate-400">by {item.author}</p>
-                            <span className="inline-block mt-1 text-[9px] bg-indigo-50 text-indigo-700 font-extrabold px-1.5 py-0.5 rounded">
-                              {item.genre}
-                            </span>
-                          </div>
-
-                          <div className="text-right">
-                            <span className="font-extrabold text-sm text-indigo-950 block">${item.price.toFixed(2)}</span>
-                            <span className="text-[9px] text-emerald-600 font-bold block">
-                              Payout: ${calculateSellerShare(item.price).toFixed(2)}
-                            </span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+              {wallet.transactions.length===0?(
+                <div className="py-10 text-center text-slate-400 text-sm">No transactions yet</div>
+              ):wallet.transactions.map(t=>(
+                <div key={t.id} className="flex items-center px-4 py-4 border-b border-slate-100 last:border-none gap-3">
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center text-lg flex-shrink-0 ${t.type==='credit'?'bg-emerald-100 text-emerald-700':t.status==='held'?'bg-amber-100 text-amber-700':'bg-red-100 text-red-600'}`}>
+                    {t.type==='credit'?'↑':t.status==='held'?'⏳':'↓'}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-bold text-slate-800 leading-tight line-clamp-2">{t.label}</p>
+                    <p className="text-xs text-slate-400 mt-0.5">{t.date}</p>
+                  </div>
+                  <div className="text-right flex-shrink-0">
+                    <p className={`font-extrabold text-base ${t.type==='credit'?'text-emerald-600':'text-red-500'}`}>{t.type==='credit'?'+':'-'}{pkr(t.amount)}</p>
+                    <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${t.status==='held'?'bg-amber-100 text-amber-700':t.status==='released'?'bg-emerald-100 text-emerald-700':'bg-slate-100 text-slate-500'}`}>{t.status}</span>
+                  </div>
                 </div>
-
-                {/* Library/Purchased books Container */}
-                <div className="bg-white rounded-3xl border border-slate-200 p-6 sm:p-8 space-y-6">
-                  <h3 className="text-lg font-extrabold text-slate-900 flex items-center justify-between">
-                    <span>Your Digital Library Purchases</span>
-                    <span className="text-[10px] bg-emerald-550/10 text-emerald-700 px-3 py-1 rounded-full font-bold">
-                      {currentUser.purchasedBooks.length} Secured
-                    </span>
-                  </h3>
-
-                  {currentUser.purchasedBooks.length === 0 ? (
-                    <div className="bg-slate-50/50 rounded-2xl border border-dashed border-slate-200 py-12 px-4 text-center">
-                      <span className="text-4xl block mb-2">🎁</span>
-                      <p className="text-xs font-bold text-slate-700">No books purchased yet</p>
-                      <p className="text-[11px] text-slate-400 mt-1 max-w-xs mx-auto">
-                        Head over to the online marketplace directory to secure items with credit card payment simulator.
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-2 gap-4">
-                      {currentUser.purchasedBooks.map((item) => (
-                        <div
-                          key={item.id}
-                          className="p-4 bg-emerald-50/30 border border-emerald-100/50 rounded-2xl flex gap-3"
-                        >
-                          <span className="text-3xl shrink-0">{item.coverEmoji}</span>
-                          <div className="min-w-0">
-                            <h4 className="font-bold text-slate-900 text-xs truncate leading-normal">{item.title}</h4>
-                            <p className="text-[10px] text-slate-500">by {item.author}</p>
-                            <span className="inline-flex items-center gap-1 text-[9px] text-emerald-700 font-bold mt-1">
-                              <span>✓ Secured</span>
-                            </span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-              </div>
-
+              ))}
             </div>
           </section>
         )}
 
       </main>
 
-      {}
-      <footer className="bg-slate-900 text-slate-300 border-t border-slate-800 mt-16">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-          
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-10 items-start">
-            
-            {/* Logo/branding block */}
-            <div className="md:col-span-4 space-y-4">
-              <div className="flex items-center gap-2.5">
-                <span className="text-2xl bg-indigo-600 p-1.5 rounded-xl text-white">📚</span>
-                <span className="text-lg font-extrabold text-white tracking-tight">BookLoop Marketplace</span>
-              </div>
-              <p className="text-xs text-slate-400 leading-relaxed">
-                BookLoop is the eco-friendly alternative to textbook consumption. We support student sustainability by charging just a 20% platform routing commission to cover costs.
-              </p>
-              <p className="text-[10px] text-slate-500">
-                © 2026 BookLoop, Inc. All Rights Reserved.
-              </p>
-            </div>
-
-            {/* Newsletter Subscription block */}
-            <div className="md:col-span-5 space-y-4">
-              <h4 className="text-white font-extrabold text-xs uppercase tracking-wider">Join Our Marketplace Digest</h4>
-              <p className="text-xs text-slate-400">
-                Receive the latest catalog arrivals, study updates, and neighborhood secondhand deals directly to your inbox.
-              </p>
-
-              {newsletterSubscribed ? (
-                <div className="bg-emerald-950/40 border border-emerald-800 p-4 rounded-xl text-emerald-300 text-xs text-center font-bold">
-                  ✓ Outstanding! You are subscribed to BookLoop Digest.
-                </div>
-              ) : (
-                <form onSubmit={handleSubscribeNewsletter} className="flex gap-2">
-                  <input
-                    type="email"
-                    required
-                    placeholder="student@university.edu"
-                    value={newsletterEmail}
-                    onChange={(e) => setNewsletterEmail(e.target.value)}
-                    className="flex-1 bg-slate-800 border border-slate-700 rounded-xl px-3.5 py-2 text-xs text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                  />
-                  <button
-                    type="submit"
-                    className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs px-5 py-2 rounded-xl transition-all uppercase"
-                  >
-                    Subscribe
-                  </button>
-                </form>
-              )}
-            </div>
-
-            {/* Commission and policies links */}
-            <div className="md:col-span-3 space-y-4 text-xs">
-              <h4 className="text-white font-extrabold text-xs uppercase tracking-wider">Platform Rates</h4>
-              <div className="space-y-2 text-slate-400">
-                <div className="flex justify-between border-b border-slate-800 pb-1">
-                  <span>Seller Revenue Share:</span>
-                  <strong className="text-emerald-400 font-black">80%</strong>
-                </div>
-                <div className="flex justify-between border-b border-slate-800 pb-1">
-                  <span>Owner Commission:</span>
-                  <strong className="text-indigo-400 font-black">20%</strong>
-                </div>
-                <div className="flex justify-between">
-                  <span>Online Credit Processing:</span>
-                  <strong className="text-white">Secure Sandbox</strong>
-                </div>
-              </div>
-            </div>
-
-          </div>
-
+      {/* ══ BOTTOM TAB BAR ══ */}
+      <nav className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-slate-200" style={{boxShadow:'0 -2px 12px rgba(0,0,0,0.06)',paddingBottom:'env(safe-area-inset-bottom,0px)'}}>
+        <div className="grid grid-cols-4 max-w-lg mx-auto">
+          {[['home','🏠','Browse'],['sell','➕','Sell'],['orders','📦','Orders'],['wallet','💰','Wallet']].map(([v,icon,label])=>(
+            <button key={v} onClick={()=>nav(v)} className={`flex flex-col items-center justify-center py-3 gap-0.5 transition-all active:bg-slate-50 ${view===v?'text-indigo-600':'text-slate-400'}`}>
+              <span className="text-2xl leading-none">{icon}</span>
+              <span className="text-[10px] font-bold leading-none mt-0.5">{label}</span>
+              {view===v&&<span className="w-1.5 h-1.5 rounded-full bg-indigo-500 mt-0.5"/>}
+            </button>
+          ))}
         </div>
-      </footer>
+      </nav>
 
     </div>
   );
